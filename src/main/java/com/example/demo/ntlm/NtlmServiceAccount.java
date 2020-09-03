@@ -1,58 +1,33 @@
 package com.example.demo.ntlm;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class NtlmServiceAccount {
 
-	private static Logger log = LoggerFactory.getLogger(NtlmServiceAccount.class);
+	private final String accountName;
+	private final String computerName;
+	private final String password;
 	
-	public NtlmServiceAccount(String domain, String computerName, String password) {
-        setDomain(domain);
-		setComputerName(computerName);
-		setPassword(password);
+	public NtlmServiceAccount(String computerName, String password) {
+		if (computerName != null) {
+			this.computerName = computerName;
+			this.accountName = computerName + "$";
+		} else {
+			this.computerName = null;
+			this.accountName = null;
+		}
+		this.password = password;
 	}
 
 	public String getAccountName() {
-		return _accountName;
+		return accountName;
 	}
 
 	public String getComputerName() {
-		return _computerName;
+		return computerName;
 	}
 
 	public String getPassword() {
-		return _password;
+		return password;
 	}
-
-	public void setComputerName(String computerName) {
-        _computerName = computerName;
-        _accountName = _computerName != null ? _computerName + "$" : _computerName;
-
-        log.info("--> domain: " + _domain);
-		log.info("--> accountName: " + _accountName);
-		log.info("--> computerName: " + _computerName);
-	}
-
-	public void setPassword(String password) {
-		_password = password;
-	}
-
-    public String getDomain() {
-        return _domain;
-    }
-
-    public void setDomain(String domain) {
-        this._domain = domain;
-    }
-
-    public String getAccount() {
-        return getAccountName() + '@' + getDomain();
-    }
-
-    private String _domain;
-	private String _accountName;
-	private String _computerName;
-	private String _password;
 
 }

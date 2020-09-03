@@ -16,8 +16,6 @@ repositories {
 dependencies {
 	compile group: 'eu.agno3.jcifs', name: 'jcifs-ng', version: '2.1.5'
 
-//	compile group: 'org.springframework.security', name: 'spring-security-ldap', version: '5.1.2.RELEASE'
-
 	implementation 'org.springframework.boot:spring-boot-starter-data-ldap'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-web'

@@ -5,14 +5,12 @@ import jcifs.dcerpc.ndr.NdrObject;
 
 public class GroupMembership extends NdrObject {
 
-	GroupMembership() {
-	}
-
+	private int _attributes;
+	private int _relativeId;
 
 	@Override
 	public void decode(NdrBuffer ndrBuffer) {
 		ndrBuffer.align(4);
-
 		_relativeId = ndrBuffer.dec_ndr_long();
 		_attributes = ndrBuffer.dec_ndr_long();
 	}
@@ -20,20 +18,8 @@ public class GroupMembership extends NdrObject {
 	@Override
 	public void encode(NdrBuffer ndrBuffer) {
 		ndrBuffer.align(4);
-
 		ndrBuffer.enc_ndr_long(_relativeId);
 		ndrBuffer.enc_ndr_long(_attributes);
 	}
-
-	public int getAttributes() {
-		return _attributes;
-	}
-
-	public int getRelativeId() {
-		return _relativeId;
-	}
-
-	private int _attributes;
-	private int _relativeId;
 
 }

@@ -6,100 +6,95 @@ import jcifs.dcerpc.ndr.NdrException;
 
 public class NetrLogonSamLogon extends DcerpcMessage {
 
-	public NetrLogonSamLogon(
-		String logonServer, String computerName,
-		NetlogonAuthenticator netlogonAuthenticator,
-		NetlogonAuthenticator returnNetlogonAuthenticator, int logonLevel,
-		NetlogonNetworkInfo netlogonNetworkInfo, int validationLevel,
-		NetlogonValidationSamInfo netlogonValidationSamInfo,
-		int authoritative) {
+    private final NetlogonAuthenticator _authenticator;
 
-		_logonServer = logonServer;
-		_computerName = computerName;
-		_authenticator = netlogonAuthenticator;
-		_returnAuthenticator = returnNetlogonAuthenticator;
-		_logonLevel = (short)logonLevel;
-		_logonInformation = netlogonNetworkInfo;
-		_validationLevel = (short)validationLevel;
-		_validationInformation = netlogonValidationSamInfo;
-		_authoritative = (byte)authoritative;
+    @SuppressWarnings("unused")
+    private byte _authoritative;
+    private final String _computerName;
+    private final NetlogonNetworkInfo _logonInformation;
+    private final short _logonLevel;
+    private final String _logonServer;
+    private final NetlogonAuthenticator _returnAuthenticator;
+    private int _status;
+    private final NetlogonValidationSamInfo _validationInformation;
+    private final short _validationLevel;
 
-		ptype = 0;
-		flags = DCERPC_FIRST_FRAG | DCERPC_LAST_FRAG;
-	}
+    public NetrLogonSamLogon(
+            String logonServer, String computerName,
+            NetlogonAuthenticator netlogonAuthenticator,
+            NetlogonAuthenticator returnNetlogonAuthenticator, int logonLevel,
+            NetlogonNetworkInfo netlogonNetworkInfo, int validationLevel,
+            NetlogonValidationSamInfo netlogonValidationSamInfo,
+            int authoritative) {
 
-	@Override
-	public void decode_out(NdrBuffer ndrBuffer) throws NdrException {
-		int returnAuthenticator = ndrBuffer.dec_ndr_long();
+        _logonServer = logonServer;
+        _computerName = computerName;
+        _authenticator = netlogonAuthenticator;
+        _returnAuthenticator = returnNetlogonAuthenticator;
+        _logonLevel = (short) logonLevel;
+        _logonInformation = netlogonNetworkInfo;
+        _validationLevel = (short) validationLevel;
+        _validationInformation = netlogonValidationSamInfo;
+        _authoritative = (byte) authoritative;
 
-		if (returnAuthenticator > 0) {
-			_returnAuthenticator.decode(ndrBuffer);
-		}
+        ptype = 0;
+        flags = DCERPC_FIRST_FRAG | DCERPC_LAST_FRAG;
+    }
 
-		ndrBuffer.dec_ndr_short();
+    @Override
+    public void decode_out(NdrBuffer ndrBuffer) throws NdrException {
+        int returnAuthenticator = ndrBuffer.dec_ndr_long();
 
-		int validationInformation = ndrBuffer.dec_ndr_long();
+        if (returnAuthenticator > 0) {
+            _returnAuthenticator.decode(ndrBuffer);
+        }
 
-		if (validationInformation > 0) {
-			ndrBuffer = ndrBuffer.deferred;
-			_validationInformation.decode(ndrBuffer);
-		}
+        ndrBuffer.dec_ndr_short();
 
-		_authoritative = (byte)ndrBuffer.dec_ndr_small();
-		_status = ndrBuffer.dec_ndr_long();
-	}
+        int validationInformation = ndrBuffer.dec_ndr_long();
 
-	@Override
-	public void encode_in(NdrBuffer ndrBuffer) {
-		ndrBuffer.enc_ndr_referent(_logonServer, 1);
-		ndrBuffer.enc_ndr_string(_logonServer);
+        if (validationInformation > 0) {
+            ndrBuffer = ndrBuffer.deferred;
+            _validationInformation.decode(ndrBuffer);
+        }
 
-		ndrBuffer.enc_ndr_referent(_computerName, 1);
-		ndrBuffer.enc_ndr_string(_computerName);
+        _authoritative = (byte) ndrBuffer.dec_ndr_small();
+        _status = ndrBuffer.dec_ndr_long();
+    }
 
-		ndrBuffer.enc_ndr_referent(_authenticator, 1);
+    @Override
+    public void encode_in(NdrBuffer ndrBuffer) {
+        ndrBuffer.enc_ndr_referent(_logonServer, 1);
+        ndrBuffer.enc_ndr_string(_logonServer);
 
-		_authenticator.encode(ndrBuffer);
+        ndrBuffer.enc_ndr_referent(_computerName, 1);
+        ndrBuffer.enc_ndr_string(_computerName);
 
-		ndrBuffer.enc_ndr_referent(_returnAuthenticator, 1);
+        ndrBuffer.enc_ndr_referent(_authenticator, 1);
 
-		_returnAuthenticator.encode(ndrBuffer);
+        _authenticator.encode(ndrBuffer);
 
-		ndrBuffer.enc_ndr_short(_logonLevel);
-		ndrBuffer.enc_ndr_short(_logonLevel);
+        ndrBuffer.enc_ndr_referent(_returnAuthenticator, 1);
 
-		ndrBuffer.enc_ndr_referent(_logonInformation, 1);
+        _returnAuthenticator.encode(ndrBuffer);
 
-		_logonInformation.encode(ndrBuffer);
+        ndrBuffer.enc_ndr_short(_logonLevel);
+        ndrBuffer.enc_ndr_short(_logonLevel);
 
-		ndrBuffer.enc_ndr_short(_validationLevel);
-	}
+        ndrBuffer.enc_ndr_referent(_logonInformation, 1);
 
-	public NetlogonValidationSamInfo getNetlogonValidationSamInfo() {
-		return _validationInformation;
-	}
+        _logonInformation.encode(ndrBuffer);
 
-	@Override
-	public int getOpnum() {
-		return 2;
-	}
+        ndrBuffer.enc_ndr_short(_validationLevel);
+    }
 
-	public int getStatus() {
-		return _status;
-	}
+    @Override
+    public int getOpnum() {
+        return 2;
+    }
 
-	private NetlogonAuthenticator _authenticator;
-
-	@SuppressWarnings("unused")
-	private byte _authoritative;
-
-	private String _computerName;
-	private NetlogonNetworkInfo _logonInformation;
-	private short _logonLevel;
-	private String _logonServer;
-	private NetlogonAuthenticator _returnAuthenticator;
-	private int _status;
-	private NetlogonValidationSamInfo _validationInformation;
-	private short _validationLevel;
+    public int getStatus() {
+        return _status;
+    }
 
 }

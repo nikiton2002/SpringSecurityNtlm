@@ -1,7 +1,5 @@
 package com.example.demo.web.resource.auth;
 
-import com.example.demo.ntlm.ArrayUtil;
-import com.example.demo.ntlm.StringPool;
 import jcifs.CIFSContext;
 import jcifs.CIFSException;
 import jcifs.config.PropertyConfiguration;
@@ -9,7 +7,10 @@ import jcifs.context.BaseContext;
 import jcifs.ntlmssp.NtlmFlags;
 import jcifs.ntlmssp.Type1Message;
 import jcifs.ntlmssp.Type2Message;
-import jcifs.util.Encdec;
+import jcifs.ntlmssp.av.AvPair;
+import jcifs.ntlmssp.av.AvPairs;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
@@ -26,47 +27,50 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.Properties;
 
 public class NtlmAuthenticationProcessingFilter extends AuthenticationFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(NtlmAuthenticationProcessingFilter.class);
+
     // Session attributes
+    private static final String AUTH_HEADER_NAME = "Authorization";
+    private static final String NTLM_HEADER_BEGIN = "NTLM ";
     private static final String NTLM_CHALLENGE = "NtlmHttpChal";
     private static final String USER_ACCOUNT = "AuthenticatedUser";
+    private static final int NTLM_MESSAGE_TYPE_BYTE = 8;
     // NTLM flags
     private static final int NTLMSSP_NEGOTIATE_EXTENDED_SESSION_SECURITY = 0x00080000;
-    // JCIFS settings
+    // JCIFS
+    // Custom
     private final static String JCIFS_HTTP_DOMAIN_CONTROLLER = "jcifs.http.domainController";
+    private final static String JCIFS_HTTP_DOMAIN_CONTROLLER_NAME = "jcifs.http.domainControllerName";
+    // Original
     private final static String JCIFS_ENCODING = "jcifs.encoding";
     private final static String JCIFS_NETBIOS_HOSTNAME = "jcifs.netbios.hostname";
     private final static String JCIFS_SMB_CLIENT_DOMAIN = "jcifs.smb.client.domain";
-    private final static String JCIFS_SMB_CLIENT_RESPONSE_TIME = "jcifs.smb.client.responseTimeout";
     private final static String JCIFS_SMB_CLIENT_USERNAME = "jcifs.smb.client.username";
     private final static String JCIFS_SMB_CLIENT_PASSWORD = "jcifs.smb.client.password";
-    private final static String NTLM_AUTH_NEGOTIATE_FLAGS = "ntlm.auth.negotiate.flags";
-    private final static String JCIFS_HTTP_DOMAIN_CONTROLLER_NAME = "jcifs.http.domainControllerName";
-
-    private final SecureRandom secureRandom;
+    private final static String JCIFS_SMB_CLIENT_RESPONSE_TIME = "jcifs.smb.client.responseTimeout";
 
     private final CIFSContext jcifsContext;
 
     public NtlmAuthenticationProcessingFilter(AuthenticationManager authenticationManager, AuthenticationConverter authenticationConverter) throws CIFSException {
         super(authenticationManager, authenticationConverter);
-        secureRandom = new SecureRandom();
 
         Properties jcifsProperties = new Properties();
+        jcifsProperties.setProperty(JCIFS_SMB_CLIENT_DOMAIN, "OIS");
+        jcifsProperties.setProperty(JCIFS_SMB_CLIENT_USERNAME, "USOI-RSN");
         jcifsProperties.setProperty("jcifs.smb.client.soTimeout", "1800000");
         jcifsProperties.setProperty("jcifs.netbios.cachePolicy", "1200");
         jcifsProperties.setProperty(JCIFS_HTTP_DOMAIN_CONTROLLER, "192.168.9.15");
         jcifsProperties.setProperty(JCIFS_HTTP_DOMAIN_CONTROLLER_NAME, "tsk-dc02.ois.ru");
         jcifsProperties.setProperty(JCIFS_ENCODING, "Cp1251");
         jcifsProperties.setProperty(JCIFS_NETBIOS_HOSTNAME, "");
-        jcifsProperties.setProperty(JCIFS_SMB_CLIENT_DOMAIN, "OIS");
         jcifsProperties.setProperty(JCIFS_SMB_CLIENT_RESPONSE_TIME, "3000");
-        jcifsProperties.setProperty(JCIFS_SMB_CLIENT_USERNAME, "USOI-RSN");
         jcifsProperties.setProperty(JCIFS_SMB_CLIENT_PASSWORD, "FNTvZ35cQH");
-        jcifsProperties.setProperty(NTLM_AUTH_NEGOTIATE_FLAGS, "WIN2008");
 
         jcifsContext = new BaseContext(new PropertyConfiguration(jcifsProperties));
     }
@@ -79,40 +83,43 @@ public class NtlmAuthenticationProcessingFilter extends AuthenticationFilter {
             return;
         }
 
-        String msg = request.getHeader("Authorization");
-        if (msg != null && (msg.startsWith("NTLM "))) {
-            byte[] src = java.util.Base64.getDecoder().decode(msg.substring(5));
-            if (src[8] == 1) {
-                // Create server challenge
-//                log.debug("Starting ntlm authentication");
+        String msg = request.getHeader(AUTH_HEADER_NAME);
+        if (msg != null && (msg.startsWith(NTLM_HEADER_BEGIN))) {
+            byte[] src = Base64.getDecoder().decode(msg.substring(5));
+            if (src[NTLM_MESSAGE_TYPE_BYTE] == 1) {
+                log.debug("Starting ntlm authentication");
+
                 byte[] serverChallenge = new byte[8];
-                secureRandom.nextBytes(serverChallenge);
+                jcifsContext.getConfig().getRandom().nextBytes(serverChallenge);
 
                 byte[] challengeMessage;
                 try {
-//                    log.debug("Creating server challenge");
+                    log.debug("Creating server challenge");
+
                     challengeMessage = negotiate(src, serverChallenge);
                     HttpSession session = request.getSession(true);
                     session.setAttribute(NTLM_CHALLENGE, serverChallenge);
-//                    log.debug("Server challenge created");
+
+                    log.debug("Server challenge created");
                 } catch (Throwable e) {
+                    log.error("NTLM : Server challenge creation failed: " + e.getMessage());
+
                     safeRemoveChallengeAttribute(request.getSession(false));
-//                    log.error(getAuthType() + ": Server challenge creation failed: " + e.getMessage());
-//                    throw new AuthException(e);
-                    throw new RuntimeException(e);
+                    throw new AuthException(e);
                 }
-                String authorization = new String(java.util.Base64.getEncoder().encode(challengeMessage));
-//                log.debug("Sending server challenge to client");
+                log.debug("Sending server challenge to client");
+
+                String authorization = new String(Base64.getEncoder().encode(challengeMessage));
                 sendWwwAuthenticateResponse(response, authorization);
-//                log.debug("Server challenge sent to client");
-            } else {
+
+                log.debug("Server challenge sent to client");
+            } else if (src[NTLM_MESSAGE_TYPE_BYTE] == 3) {
+                log.debug("Got server challenge result from client");
 
                 HttpSession session = request.getSession(false);
                 byte[] serverChallenge = (byte[]) safeGetAttribute(session, NTLM_CHALLENGE);
-//            log.debug("Got server challenge result from client");
                 if (serverChallenge == null) {
-//                log.debug("Server challenge result from client is null");
-                    // Start NTLM login
+                    log.debug("Server challenge result from client is null");
                     sendWwwAuthenticateResponse(response);
                 }
                 try {
@@ -139,8 +146,7 @@ public class NtlmAuthenticationProcessingFilter extends AuthenticationFilter {
 //        getFailureHandler().onAuthenticationFailure(request, response, failed);
     }
 
-    private void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain,
-                                          Authentication authentication) throws IOException, ServletException {
+    private void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Authentication authentication) throws IOException, ServletException {
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
@@ -173,32 +179,10 @@ public class NtlmAuthenticationProcessingFilter extends AuthenticationFilter {
         return type2Message.toByteArray();
     }
 
-    private byte[] getAVPairBytes(int avId, String value) {
-
-        byte[] valueBytes = value.getBytes(StandardCharsets.UTF_16LE);
-        byte[] avPairBytes = new byte[4 + valueBytes.length];
-
-        Encdec.enc_uint16le((short) avId, avPairBytes, 0);
-        Encdec.enc_uint16le((short) valueBytes.length, avPairBytes, 2);
-
-        System.arraycopy(valueBytes, 0, avPairBytes, 4, valueBytes.length);
-
-        return avPairBytes;
-    }
-
     private byte[] getTargetInformation() {
-
-        byte[] computerName = getAVPairBytes(
-                1, jcifsContext.getConfig().getDefaultUsername());
-        byte[] domainName = getAVPairBytes(2, jcifsContext.getConfig().getDefaultDomain());
-
-        byte[] targetInformation = ArrayUtil.append(computerName, domainName);
-
-        byte[] eol = getAVPairBytes(0, StringPool.BLANK);
-
-        targetInformation = ArrayUtil.append(targetInformation, eol);
-
-        return targetInformation;
+        AvPair computerName = new AvPair(1, jcifsContext.getConfig().getDefaultUsername().getBytes(StandardCharsets.UTF_16LE));
+        AvPair domainName = new AvPair(2, jcifsContext.getConfig().getDefaultDomain().getBytes(StandardCharsets.UTF_16LE));
+        return AvPairs.encode(Arrays.asList(computerName, domainName));
     }
 
     private void safeRemoveChallengeAttribute(HttpSession session) {

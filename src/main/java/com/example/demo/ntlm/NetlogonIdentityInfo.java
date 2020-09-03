@@ -7,78 +7,80 @@ import jcifs.dcerpc.rpc;
 
 public class NetlogonIdentityInfo extends NdrObject {
 
-	public NetlogonIdentityInfo(
-		String logonDomainName, int parameterControl, int reservedLow,
-		int reservedHigh, String userName, String workstation) {
+    private final rpc.unicode_string _logonDomainName;
+    private final rpc.unicode_string _userName;
+    private final rpc.unicode_string _workstation;
+    private final int _parameterControl;
+    private final int _reservedHigh;
+    private final int _reservedLow;
 
-		_logonDomainName = new UnicodeString(logonDomainName, false);
-		_parameterControl= parameterControl;
-		_reservedLow = reservedLow;
-		_reservedHigh = reservedHigh;
-		_userName = new UnicodeString(userName, false);
-		_workstation = new UnicodeString(workstation, false);
-	}
+    public NetlogonIdentityInfo(String logonDomainName,
+                                int parameterControl,
+                                int reservedLow,
+                                int reservedHigh,
+                                String userName,
+                                String workstation) {
 
-	@Override
-	public void decode(NdrBuffer ndrBuffer) {
-	}
+        _logonDomainName = new UnicodeString(logonDomainName, false);
+        _parameterControl = parameterControl;
+        _reservedLow = reservedLow;
+        _reservedHigh = reservedHigh;
+        _userName = new UnicodeString(userName, false);
+        _workstation = new UnicodeString(workstation, false);
+    }
 
-	@Override
-	public void encode(NdrBuffer ndrBuffer) {
-		ndrBuffer.enc_ndr_short(_logonDomainName.length);
-		ndrBuffer.enc_ndr_short(_logonDomainName.maximum_length);
-		ndrBuffer.enc_ndr_referent(_logonDomainName.buffer, 1);
-		ndrBuffer.enc_ndr_long(_parameterControl);
-		ndrBuffer.enc_ndr_long(_reservedLow);
-		ndrBuffer.enc_ndr_long(_reservedHigh);
-		ndrBuffer.enc_ndr_short(_userName.length);
-		ndrBuffer.enc_ndr_short(_userName.maximum_length);
-		ndrBuffer.enc_ndr_referent(_userName.buffer, 1);
-		ndrBuffer.enc_ndr_short(_workstation.length);
-		ndrBuffer.enc_ndr_short(_workstation.maximum_length);
-		ndrBuffer.enc_ndr_referent(_workstation.buffer, 1);
-	}
+    @Override
+    public void decode(NdrBuffer ndrBuffer) {
+    }
 
-	public void encodeLogonDomainName(NdrBuffer ndrBuffer) {
-		encodeUnicodeString(ndrBuffer, _logonDomainName);
-	}
+    @Override
+    public void encode(NdrBuffer ndrBuffer) {
+        ndrBuffer.enc_ndr_short(_logonDomainName.length);
+        ndrBuffer.enc_ndr_short(_logonDomainName.maximum_length);
+        ndrBuffer.enc_ndr_referent(_logonDomainName.buffer, 1);
+        ndrBuffer.enc_ndr_long(_parameterControl);
+        ndrBuffer.enc_ndr_long(_reservedLow);
+        ndrBuffer.enc_ndr_long(_reservedHigh);
+        ndrBuffer.enc_ndr_short(_userName.length);
+        ndrBuffer.enc_ndr_short(_userName.maximum_length);
+        ndrBuffer.enc_ndr_referent(_userName.buffer, 1);
+        ndrBuffer.enc_ndr_short(_workstation.length);
+        ndrBuffer.enc_ndr_short(_workstation.maximum_length);
+        ndrBuffer.enc_ndr_referent(_workstation.buffer, 1);
+    }
 
-	public void encodeUserName(NdrBuffer ndrBuffer) {
-		encodeUnicodeString(ndrBuffer, _userName);
-	}
+    public void encodeLogonDomainName(NdrBuffer ndrBuffer) {
+        encodeUnicodeString(ndrBuffer, _logonDomainName);
+    }
 
-	public void encodeWorkStationName(NdrBuffer ndrBuffer) {
-		encodeUnicodeString(ndrBuffer, _workstation);
-	}
+    public void encodeUserName(NdrBuffer ndrBuffer) {
+        encodeUnicodeString(ndrBuffer, _userName);
+    }
 
-	protected void encodeUnicodeString(
-		NdrBuffer ndrBuffer, rpc.unicode_string string ) {
+    public void encodeWorkStationName(NdrBuffer ndrBuffer) {
+        encodeUnicodeString(ndrBuffer, _workstation);
+    }
 
-		ndrBuffer = ndrBuffer.deferred;
+    protected void encodeUnicodeString(NdrBuffer ndrBuffer, rpc.unicode_string string) {
 
-		int stringBufferl = string.length / 2;
-		int stringBuffers = string.maximum_length / 2;
+        ndrBuffer = ndrBuffer.deferred;
 
-		ndrBuffer.enc_ndr_long(stringBuffers);
-		ndrBuffer.enc_ndr_long(0);
-		ndrBuffer.enc_ndr_long(stringBufferl);
+        int stringBufferl = string.length / 2;
+        int stringBuffers = string.maximum_length / 2;
 
-		int stringBufferIndex = ndrBuffer.index;
+        ndrBuffer.enc_ndr_long(stringBuffers);
+        ndrBuffer.enc_ndr_long(0);
+        ndrBuffer.enc_ndr_long(stringBufferl);
 
-		ndrBuffer.advance(2 * stringBufferl);
+        int stringBufferIndex = ndrBuffer.index;
 
-		ndrBuffer = ndrBuffer.derive(stringBufferIndex);
+        ndrBuffer.advance(2 * stringBufferl);
 
-		for (int _i = 0; _i < stringBufferl; _i++) {
-			ndrBuffer.enc_ndr_short(string.buffer[_i]);
-		}
-	}
+        ndrBuffer = ndrBuffer.derive(stringBufferIndex);
 
-	private rpc.unicode_string _logonDomainName;
-	private int _parameterControl;
-	private int _reservedHigh;
-	private int _reservedLow;
-	private rpc.unicode_string _userName;
-	private rpc.unicode_string _workstation;
+        for (int _i = 0; _i < stringBufferl; _i++) {
+            ndrBuffer.enc_ndr_short(string.buffer[_i]);
+        }
+    }
 
 }

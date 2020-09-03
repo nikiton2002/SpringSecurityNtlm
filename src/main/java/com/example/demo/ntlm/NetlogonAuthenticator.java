@@ -5,6 +5,9 @@ import jcifs.dcerpc.ndr.NdrObject;
 
 public class NetlogonAuthenticator extends NdrObject {
 
+	private final byte[] _credential;
+	private int _timestamp;
+
 	public NetlogonAuthenticator() {
 		_credential = new byte[8];
 	}
@@ -46,8 +49,5 @@ public class NetlogonAuthenticator extends NdrObject {
 			ndrBuffer.enc_ndr_small(_credential[i]);
 		}
 	}
-
-	private byte[] _credential;
-	private int _timestamp;
 
 }

@@ -5,68 +5,64 @@ import jcifs.dcerpc.ndr.NdrBuffer;
 
 public class NetrServerReqChallenge extends DcerpcMessage {
 
-	public NetrServerReqChallenge(
-		String primaryName, String computerName, byte[] clientChallenge,
-		byte[] serverChallenge) {
+	private final byte[] _clientChallenge;
+	private final String _computerName;
+	private final String _primaryName;
+	private final byte[] _serverChallenge;
 
-		_primaryName = primaryName;
-		_computerName = computerName;
-		_clientChallenge = clientChallenge;
-		_serverChallenge = serverChallenge;
+    public NetrServerReqChallenge(String primaryName,
+                                  String computerName,
+                                  byte[] clientChallenge,
+                                  byte[] serverChallenge) {
 
-		 ptype = 0;
-		 flags = DCERPC_FIRST_FRAG | DCERPC_LAST_FRAG;
-	}
+        _primaryName = primaryName;
+        _computerName = computerName;
+        _clientChallenge = clientChallenge;
+        _serverChallenge = serverChallenge;
 
-	@Override
-	public void decode_out(NdrBuffer ndrBuffer) {
-		int index = ndrBuffer.index;
+        ptype = 0;
+        flags = DCERPC_FIRST_FRAG | DCERPC_LAST_FRAG;
+    }
 
-		ndrBuffer.advance(8);
+    @Override
+    public void decode_out(NdrBuffer ndrBuffer) {
+        int index = ndrBuffer.index;
 
-		ndrBuffer = ndrBuffer.derive(index);
+        ndrBuffer.advance(8);
 
-		for (int i = 0; i < 8; i++) {
-			_serverChallenge[i] = (byte) ndrBuffer.dec_ndr_small();
-		}
+        ndrBuffer = ndrBuffer.derive(index);
 
-		_status = ndrBuffer.dec_ndr_long();
-	}
+        for (int i = 0; i < 8; i++) {
+            _serverChallenge[i] = (byte) ndrBuffer.dec_ndr_small();
+        }
+        // status (int)
+        ndrBuffer.dec_ndr_long();
+    }
 
-	@Override
-	public void encode_in(NdrBuffer ndrBuffer) {
-		ndrBuffer.enc_ndr_referent(_primaryName, 1);
-		ndrBuffer.enc_ndr_string(_primaryName);
-		ndrBuffer.enc_ndr_string(_computerName);
+    @Override
+    public void encode_in(NdrBuffer ndrBuffer) {
+        ndrBuffer.enc_ndr_referent(_primaryName, 1);
+        ndrBuffer.enc_ndr_string(_primaryName);
+        ndrBuffer.enc_ndr_string(_computerName);
 
-		int index = ndrBuffer.index;
+        int index = ndrBuffer.index;
 
-		ndrBuffer.advance(8);
+        ndrBuffer.advance(8);
 
-		ndrBuffer = ndrBuffer.derive(index);
+        ndrBuffer = ndrBuffer.derive(index);
 
-		for (int i = 0; i < 8; i++) {
-			ndrBuffer.enc_ndr_small(_clientChallenge[i]);
-		}
-	}
+        for (int i = 0; i < 8; i++) {
+            ndrBuffer.enc_ndr_small(_clientChallenge[i]);
+        }
+    }
 
-	@Override
-	public int getOpnum() {
-		return 4;
-	}
+    @Override
+    public int getOpnum() {
+        return 4;
+    }
 
-	public byte[] getServerChallenge() {
-		return _serverChallenge;
-	}
-
-	public int getStatus() {
-		return _status;
-	}
-
-	private byte[] _clientChallenge;
-	private String _computerName;
-	private String _primaryName;
-	private byte[] _serverChallenge;
-	private int _status;
+    public byte[] getServerChallenge() {
+        return _serverChallenge;
+    }
 
 }

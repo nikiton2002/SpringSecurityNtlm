@@ -1,12 +1,12 @@
 package com.example.demo.ntlm;
 
-import com.example.demo.ntlm.oldutil.DES;
-import com.example.demo.ntlm.oldutil.HMACT64;
-import com.example.demo.ntlm.oldutil.MD4;
 import jcifs.CIFSContext;
 import jcifs.dcerpc.DcerpcHandle;
+import jcifs.util.Crypto;
 import jcifs.util.Encdec;
 
+import javax.crypto.Cipher;
+import javax.crypto.ShortBufferException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -17,9 +17,15 @@ public class NetlogonConnection {
 
     private static final String NTLM_AUTH_NEGOTIATE_WIN2003 = "0x600FFFFF";
     private static final String NTLM_AUTH_NEGOTIATE_WIN2008 = "0x6013C600";
-	private static final String NTLM_AUTH_NEGOTIATE_FLAGS = "WIN2008";
+    // SystemProperties.singleInstance.getStringProperty(SystemProperties.NTLM_AUTH_NEGOTIATE_FLAGS)
+    private static final String NTLM_AUTH_NEGOTIATE_FLAGS = "WIN2008";
 
-	public NetlogonConnection() {
+    private static int _negotiateFlags;
+    private byte[] _clientCredential;
+    private DcerpcHandle _dcerpcHandle;
+    private byte[] _sessionKey;
+
+    public NetlogonConnection() {
         if (_negotiateFlags == 0) {
             String negotiateFlags = NTLM_AUTH_NEGOTIATE_FLAGS;
 
@@ -34,151 +40,119 @@ public class NetlogonConnection {
             _negotiateFlags = Long.valueOf(negotiateFlags.substring(2), 16).intValue();
 
         }
-	}
+    }
 
-	public NetlogonAuthenticator computeNetlogonAuthenticator() {
-		int timestamp = (int)System.currentTimeMillis();
+    public NetlogonAuthenticator computeNetlogonAuthenticator() throws ShortBufferException {
+        int timestamp = (int) System.currentTimeMillis();
+        int input = Encdec.dec_uint32le(_clientCredential, 0) + timestamp;
+        Encdec.enc_uint32le(input, _clientCredential, 0);
+        byte[] credential = computeNetlogonCredential(_clientCredential, _sessionKey);
+        return new NetlogonAuthenticator(credential, timestamp);
+    }
 
-		int input = Encdec.dec_uint32le(_clientCredential, 0) + timestamp;
+    public void connect(String domainController,
+                        String domainControllerName,
+                        NtlmServiceAccount ntlmServiceAccount,
+                        CIFSContext context) throws IOException, NoSuchAlgorithmException, NtlmLogonException, ShortBufferException {
 
-		Encdec.enc_uint32le(input, _clientCredential, 0);
+        String endpoint = "ncacn_np:" + domainController + "[\\PIPE\\NETLOGON]";
 
-		byte[] credential = computeNetlogonCredential(
-			_clientCredential, _sessionKey);
+        DcerpcHandle dcerpcHandle = DcerpcHandle.getHandle(endpoint, context);
+        setDcerpcHandle(dcerpcHandle);
+        dcerpcHandle.bind();
 
-		return new NetlogonAuthenticator(credential, timestamp);
-	}
+        byte[] clientChallenge = new byte[8];
+        context.getConfig().getRandom().nextBytes(clientChallenge);
 
-	public void connect(String domainController,
-						String domainControllerName,
-						NtlmServiceAccount ntlmServiceAccount,
-						CIFSContext context)
-		throws IOException, NoSuchAlgorithmException, NtlmLogonException {
+        NetrServerReqChallenge netrServerReqChallenge =
+                new NetrServerReqChallenge(
+                        domainControllerName,
+                        ntlmServiceAccount.getComputerName(),
+                        clientChallenge,
+                        new byte[8]);
 
-//		NtlmPasswordAuthentication ntlmPasswordAuthentication =
-//			new NtlmPasswordAuthentication(
-//				null, ntlmServiceAccount.getAccount(),
-//				ntlmServiceAccount.getPassword());
+        dcerpcHandle.sendrecv(netrServerReqChallenge);
 
-		String endpoint = "ncacn_np:" + domainController + "[\\PIPE\\NETLOGON]";
+        MessageDigest md4 = Crypto.getMD4();
+        md4.update(ntlmServiceAccount.getPassword().getBytes(StandardCharsets.UTF_16LE));
 
-		DcerpcHandle dcerpcHandle = DcerpcHandle.getHandle(
-			endpoint, context);
+        byte[] sessionKey = computeSessionKey(
+                md4.digest(),
+                clientChallenge,
+                netrServerReqChallenge.getServerChallenge());
 
-		setDcerpcHandle(dcerpcHandle);
+        byte[] clientCredential = computeNetlogonCredential(clientChallenge, sessionKey);
 
-		dcerpcHandle.bind();
+        NetrServerAuthenticate3 netrServerAuthenticate3 =
+                new NetrServerAuthenticate3(
+                        domainControllerName,
+                        ntlmServiceAccount.getAccountName(),
+                        2,
+                        ntlmServiceAccount.getComputerName(),
+                        clientCredential,
+                        new byte[8],
+                        _negotiateFlags);
 
-		byte[] clientChallenge = new byte[8];
+        dcerpcHandle.sendrecv(netrServerAuthenticate3);
 
-		BigEndianCodec.putLong(clientChallenge, 0, SecureRandomUtil.nextLong());
+        byte[] serverCredential = computeNetlogonCredential(netrServerReqChallenge.getServerChallenge(), sessionKey);
 
-		NetrServerReqChallenge netrServerReqChallenge =
-			new NetrServerReqChallenge(
-				domainControllerName, ntlmServiceAccount.getComputerName(),
-				clientChallenge, new byte[8]);
+        if (!Arrays.equals(serverCredential, netrServerAuthenticate3.getServerCredential())) {
+            throw new NtlmLogonException("Session key negotiation failed");
+        }
 
-		dcerpcHandle.sendrecv(netrServerReqChallenge);
+        _clientCredential = clientCredential;
+        _sessionKey = sessionKey;
+    }
 
-		MD4 md4 = new MD4();
+    public void disconnect() throws IOException {
+        if (_dcerpcHandle != null) {
+            _dcerpcHandle.close();
+        }
+    }
 
-		md4.update(ntlmServiceAccount.getPassword().getBytes(StandardCharsets.UTF_16LE));
+    public DcerpcHandle getDcerpcHandle() {
+        return _dcerpcHandle;
+    }
 
-		byte[] sessionKey = computeSessionKey(
-			md4.digest(), clientChallenge,
-			netrServerReqChallenge.getServerChallenge());
+    public void setDcerpcHandle(DcerpcHandle dcerpcHandle) {
+        _dcerpcHandle = dcerpcHandle;
+    }
 
-		byte[] clientCredential = computeNetlogonCredential(
-			clientChallenge, sessionKey);
+    protected byte[] computeNetlogonCredential(byte[] input, byte[] sessionKey) throws ShortBufferException {
 
-		NetrServerAuthenticate3 netrServerAuthenticate3 =
-			new NetrServerAuthenticate3(
-				domainControllerName, ntlmServiceAccount.getAccountName(), 2,
-				ntlmServiceAccount.getComputerName(), clientCredential,
-				new byte[8], _negotiateFlags);
+        byte[] k1 = new byte[7];
+        byte[] k2 = new byte[7];
 
-		dcerpcHandle.sendrecv(netrServerAuthenticate3);
+        System.arraycopy(sessionKey, 0, k1, 0, 7);
+        System.arraycopy(sessionKey, 7, k2, 0, 7);
 
-		byte[] serverCredential = computeNetlogonCredential(
-			netrServerReqChallenge.getServerChallenge(), sessionKey);
+        Cipher k3 = Crypto.getDES(k1);
+        Cipher k4 = Crypto.getDES(k2);
 
-		if (!Arrays.equals(
-				serverCredential,
-				netrServerAuthenticate3.getServerCredential())) {
+        byte[] output1 = new byte[8];
+        byte[] output2 = new byte[8];
 
-			throw new NtlmLogonException("Session key negotiation failed");
-		}
+        k3.update(input, 0, input.length, output1);
+        k4.update(output1, 0, input.length, output2);
 
-		_clientCredential = clientCredential;
-		_sessionKey = sessionKey;
-	}
+        return output2;
+    }
 
-	public void disconnect() throws IOException {
-		if (_dcerpcHandle != null) {
-			_dcerpcHandle.close();
-		}
-	}
+    protected byte[] computeSessionKey(byte[] sharedSecret,
+                                       byte[] clientChallenge,
+                                       byte[] serverChallenge) throws NoSuchAlgorithmException {
 
-	public byte[] getClientCredential() {
-		return _clientCredential;
-	}
+        MessageDigest messageDigest = MessageDigest.getInstance("MD5");
 
-	public DcerpcHandle getDcerpcHandle() {
-		return _dcerpcHandle;
-	}
+        byte[] zeroes = {0, 0, 0, 0};
+        messageDigest.update(zeroes, 0, 4);
+        messageDigest.update(clientChallenge, 0, 8);
+        messageDigest.update(serverChallenge, 0, 8);
 
-	public byte[] getSessionKey() {
-		return _sessionKey;
-	}
-
-	public void setDcerpcHandle(DcerpcHandle dcerpcHandle) {
-		_dcerpcHandle = dcerpcHandle;
-	}
-
-	protected byte[] computeNetlogonCredential(
-		byte[] input, byte[] sessionKey) {
-
-		byte[] k1 = new byte[7];
-		byte[] k2 = new byte[7];
-
-		System.arraycopy(sessionKey, 0, k1, 0, 7);
-		System.arraycopy(sessionKey, 7, k2, 0, 7);
-
-		DES k3 = new DES(k1);
-		DES k4 = new DES(k2);
-
-		byte[] output1 = new byte[8];
-		byte[] output2 = new byte[8];
-
-		k3.encrypt(input, output1);
-		k4.encrypt(output1, output2);
-
-		return output2;
-	}
-
-	protected byte[] computeSessionKey(
-			byte[] sharedSecret, byte[] clientChallenge, byte[] serverChallenge)
-		throws NoSuchAlgorithmException {
-
-		MessageDigest messageDigest = MessageDigest.getInstance("MD5");
-
-		byte[] zeroes = {0, 0, 0, 0};
-
-		messageDigest.update(zeroes, 0, 4);
-		messageDigest.update(clientChallenge, 0, 8);
-		messageDigest.update(serverChallenge, 0, 8);
-
-		HMACT64 hmact64 = new HMACT64(sharedSecret);
-
-		hmact64.update(messageDigest.digest());
-
-		return hmact64.digest();
-	}
-
-	private static int _negotiateFlags;
-
-	private byte[] _clientCredential;
-	private DcerpcHandle _dcerpcHandle;
-	private byte[] _sessionKey;
+        MessageDigest hmact64 = Crypto.getHMACT64(sharedSecret);
+        hmact64.update(messageDigest.digest());
+        return hmact64.digest();
+    }
 
 }

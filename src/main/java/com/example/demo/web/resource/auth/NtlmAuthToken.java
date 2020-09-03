@@ -1,61 +1,63 @@
 package com.example.demo.web.resource.auth;
 
-import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
+public class NtlmAuthToken extends UsernamePasswordAuthenticationToken {
 
-public class NtlmAuthToken extends AbstractAuthenticationToken {
-
-    private String domain;
-    private String userName;
-    private String workstation;
-    private final byte[] material;
-    private final byte[] serverChallenge;
-
-    public NtlmAuthToken(byte[] material, byte[] serverChallenge) {
-        super(null);
-        this.material = material;
-        this.serverChallenge = serverChallenge;
+    // Для прошедших аутентификацию
+    public NtlmAuthToken(Object principal, Object credentials) {
+        super(principal, credentials, null);
     }
 
-    @Override
-    public Object getCredentials() {
-        return null;
-    }
-
-    @Override
-    public Object getPrincipal() {
-        return null;
+    public NtlmAuthToken(Object principal, Object credentials, String domain, String workstation, byte[] ntResponse, byte[] lmResponse) {
+        super(principal, credentials);
+        setDetails(new Details(domain, workstation, ntResponse, lmResponse));
     }
 
     public String getDomain() {
-        return domain;
-    }
-
-    public void setDomain(String domain) {
-        this.domain = domain;
-    }
-
-    public String getUserName() {
-        return userName;
-    }
-
-    public void setUserName(String userName) {
-        this.userName = userName;
+        return ((Details) getDetails()).getDomain();
     }
 
     public String getWorkstation() {
-        return workstation;
+        return ((Details) getDetails()).getWorkstation();
     }
 
-    public void setWorkstation(String workstation) {
-        this.workstation = workstation;
+    public byte[] getNtResponse() {
+        return ((Details) getDetails()).getNtResponse();
     }
 
-    public byte[] getServerChallenge() {
-        return serverChallenge;
+    public byte[] getLmResponse() {
+        return ((Details) getDetails()).getLmResponse();
     }
 
-    public byte[] getMaterial() {
-        return material;
+    public static class Details {
+        private final String domain;
+        private final String workstation;
+        private final byte[] ntResponse;
+        private final byte[] lmResponse;
+
+        public Details(String domain, String workstation, byte[] ntResponse, byte[] lmResponse) {
+            this.domain = domain;
+            this.workstation = workstation;
+            this.ntResponse = ntResponse;
+            this.lmResponse = lmResponse;
+        }
+
+        public String getDomain() {
+            return domain;
+        }
+
+        public String getWorkstation() {
+            return workstation;
+        }
+
+        public byte[] getNtResponse() {
+            return ntResponse;
+        }
+
+        public byte[] getLmResponse() {
+            return lmResponse;
+        }
     }
+
 }
